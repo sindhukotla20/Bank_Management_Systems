@@ -1,0 +1,252 @@
+#include <stdio.h>
+#include <string.h>
+#include <stdlib.h>
+
+#define FILE_NAME "bank.dat"
+
+struct Account {
+    int acc_no;
+    char name[50];
+    char type[20];   // e.g., "Savings" / "Current"
+    float balance;
+};
+
+void flushInput(void) {
+    int c;
+    while ((c = getchar()) != '\n' && c != EOF) {}
+}
+
+int find_account_by_no(int key, struct Account *out) {
+    FILE *fp = fopen(FILE_NAME, "rb");
+    if (!fp) return 0;
+
+    struct Account A;
+    while (fread(&A, sizeof(A), 1, fp) == 1) {
+        if (A.acc_no == key) {
+            if (out) *out = A;
+            fclose(fp);
+            return 1;
+        }
+    }
+
+    fclose(fp);
+    return 0;
+}
+
+void addAccount() {
+    struct Account A;
+
+    printf("\n----- ADD ACCOUNT -----\n");
+    printf("Enter Account Number: ");
+    scanf("%d", &A.acc_no);
+    flushInput();
+
+    if (find_account_by_no(A.acc_no, NULL)) {
+        printf("Account number already exists. Try a different number.\n");
+        return;
+    }
+
+    printf("Enter Account Holder Name: ");
+    scanf(" %[^\n]", A.name);
+
+    printf("Enter Account Type (Savings/Current): ");
+    scanf(" %19s", A.type);
+
+    printf("Enter Initial Balance: ");
+    scanf("%f", &A.balance);
+    flushInput();
+
+    FILE *fp = fopen(FILE_NAME, "ab");
+    if (!fp) {
+        perror("Error opening file");
+        return;
+    }
+
+    fwrite(&A, sizeof(A), 1, fp);
+    fclose(fp);
+
+    printf("\n✅ Account Created Successfully!\n");
+}
+
+void displayAccounts() {
+    FILE *fp = fopen(FILE_NAME, "rb");
+    if (!fp) {
+        printf("\n⚠️ No data file yet. Add an account first.\n");
+        return;
+    }
+
+    struct Account A;
+    int count = 0;
+
+    printf("\n----- ACCOUNT LIST -----\n");
+    while (fread(&A, sizeof(A), 1, fp) == 1) {
+        printf("\nAccount No : %d\n", A.acc_no);
+        printf("Name       : %s\n", A.name);
+        printf("Type       : %s\n", A.type);
+        printf("Balance    : %.2f\n", A.balance);
+        printf("----------------------------\n");
+        count++;
+    }
+
+    if (count == 0) {
+        printf("No accounts found.\n");
+    }
+
+    fclose(fp);
+}
+
+void searchAccount() {
+    int key;
+    printf("\nEnter Account Number to Search: ");
+    scanf("%d", &key);
+    flushInput();
+
+    struct Account A;
+    if (find_account_by_no(key, &A)) {
+        printf("\n----- ACCOUNT DETAILS -----\n");
+        printf("Account No : %d\n", A.acc_no);
+        printf("Name       : %s\n", A.name);
+        printf("Type       : %s\n", A.type);
+        printf("Balance    : %.2f\n", A.balance);
+        printf("----------------------------\n");
+    } else {
+        printf("\nAccount Not Found.\n");
+    }
+}
+
+void updateAccount() {
+    int key, choice, updated = 0;
+
+    printf("\nEnter Account Number to Update: ");
+    scanf("%d", &key);
+    flushInput();
+
+    FILE *fp = fopen(FILE_NAME, "rb");
+    if (!fp) {
+        printf("No data file.\n");
+        return;
+    }
+
+    FILE *tmp = fopen("temp.dat", "wb");
+    if (!tmp) {
+        perror("Error creating temp file");
+        fclose(fp);
+        return;
+    }
+
+    struct Account A;
+    while (fread(&A, sizeof(A), 1, fp) == 1) {
+        if (A.acc_no == key) {
+            printf("\n1. Edit Name\n");
+            printf("2. Edit Account Type\n");
+            printf("3. Edit Both\n");
+            printf("Enter choice: ");
+            scanf("%d", &choice);
+            flushInput();
+
+            if (choice == 1) {
+                printf("Enter New Name: ");
+                scanf(" %[^\n]", A.name);
+                updated = 1;
+            } else if (choice == 2) {
+                printf("Enter New Account Type: ");
+                scanf(" %19s", A.type);
+                updated = 1;
+            } else if (choice == 3) {
+                printf("Enter New Name: ");
+                scanf(" %[^\n]", A.name);
+                printf("Enter New Account Type: ");
+                scanf(" %19s", A.type);
+                updated = 1;
+            } else {
+                printf("Invalid choice. No changes made.\n");
+            }
+        }
+        fwrite(&A, sizeof(A), 1, tmp);
+    }
+
+    fclose(fp);
+    fclose(tmp);
+
+    remove(FILE_NAME);
+    rename("temp.dat", FILE_NAME);
+
+    if (updated)
+        printf("\n✅ Account updated successfully.\n");
+    else
+        printf("\n⚠️ Account not found or not updated.\n");
+}
+
+void deleteAccount() {
+    int key, found = 0;
+    printf("\nEnter Account Number to Delete: ");
+    scanf("%d", &key);
+    flushInput();
+
+    FILE *fp = fopen(FILE_NAME, "rb");
+    if (!fp) {
+        printf("No data file.\n");
+        return;
+    }
+
+    FILE *tmp = fopen("temp.dat", "wb");
+    if (!tmp) {
+        perror("Error creating temp file");
+        fclose(fp);
+        return;
+    }
+
+    struct Account A;
+    while (fread(&A, sizeof(A), 1, fp) == 1) {
+        if (A.acc_no == key) {
+            found = 1;
+            continue; // skip this record
+        }
+        fwrite(&A, sizeof(A), 1, tmp);
+    }
+
+    fclose(fp);
+    fclose(tmp);
+
+    remove(FILE_NAME);
+    rename("temp.dat", FILE_NAME);
+
+    if (found)
+        printf("\n✅ Account deleted successfully.\n");
+    else
+        printf("\n⚠️ Account not found.\n");
+}
+
+int main() {
+    int choice;
+
+    while (1) {
+        printf("\n===== BANK MANAGEMENT SYSTEM =====\n");
+        printf("1. Add Account\n");
+        printf("2. Display All Accounts\n");
+        printf("3. Search Account\n");
+        printf("4. Update Account\n");
+        printf("5. Delete Account\n");
+        printf("6. Exit\n");
+        printf("Enter your choice: ");
+
+        if (scanf("%d", &choice) != 1) {
+            flushInput();
+            continue;
+        }
+        flushInput();
+
+        switch (choice) {
+            case 1: addAccount(); break;
+            case 2: displayAccounts(); break;
+            case 3: searchAccount(); break;
+            case 4: updateAccount(); break;
+            case 5: deleteAccount(); break;
+            case 6:
+                printf("\nGoodbye!\n");
+                return 0;
+            default:
+                printf("Invalid choice. Try again.\n");
+        }
+    }
+}
